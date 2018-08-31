@@ -18,6 +18,3 @@ createable: false
 methods:
   - name: cancel
     summary: Cancels the pending notification.
-    deprecated:
-        since: "7.3.0"
-        notes: Use <Titanium.App.iOS.NotificationCenter.removePendingNotificationsWithIdentifiers> instead.

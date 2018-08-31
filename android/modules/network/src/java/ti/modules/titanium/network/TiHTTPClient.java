@@ -10,7 +10,6 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileDescriptor;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FilterOutputStream;
@@ -33,6 +32,7 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -221,7 +221,6 @@ public class TiHTTPClient
 				charset = "UTF-8";
 			}
 			responseData = null;
-			responseText = null;
 
 			int status = connection.getResponseCode();
 			InputStream in;
@@ -242,7 +241,7 @@ public class TiHTTPClient
 				Log.d(TAG, "Content length: " + contentLength, Log.DEBUG_MODE);
 				int count = 0;
 				long totalSize = 0;
-				byte[] buf = new byte[8192];
+				byte[] buf = new byte[4096];
 				Log.d(TAG, "Available: " + is.available(), Log.DEBUG_MODE);
 
 				while ((count = is.read(buf)) != -1) {
@@ -251,6 +250,7 @@ public class TiHTTPClient
 					}
 					totalSize += count;
 					try {
+						responseText = new String(Arrays.copyOfRange(buf, 0, count));
 						handleEntityData(buf, count, totalSize, contentLength);
 					} catch (IOException e) {
 						Log.e(TAG, "Error handling entity data", e);
@@ -346,10 +346,15 @@ public class TiHTTPClient
 		KrollDict callbackData = new KrollDict();
 		callbackData.put("totalCount", contentLength);
 		callbackData.put("totalSize", totalSize);
-		callbackData.put(TiC.PROPERTY_SIZE, size);
+		callbackData.put("size", size);
 
-		// return progress as -1 if it is outside the valid range
+		byte[] blobData = new byte[size];
+		System.arraycopy(data, 0, blobData, 0, size);
+
+		TiBlob blob = TiBlob.blobFromData(blobData, contentType);
+		callbackData.put("blob", blob);
 		double progress = ((double) totalSize) / ((double) contentLength);
+		// return progress as -1 if it is outside the valid range
 		if (progress > 1 || progress < 0) {
 			progress = NetworkModule.PROGRESS_UNKNOWN;
 		}
@@ -360,19 +365,9 @@ public class TiHTTPClient
 
 	private void finishedReceivingEntityData(long contentLength) throws IOException
 	{
-		if (responseOut == null) {
-			return;
-		}
-
-		responseOut.flush();
 		if (responseOut instanceof ByteArrayOutputStream) {
 			ByteArrayOutputStream byteStream = (ByteArrayOutputStream) responseOut;
 			responseData = TiBlob.blobFromData(byteStream.toByteArray(), contentType);
-		} else if (responseOut instanceof FileOutputStream) {
-			FileDescriptor fileDescriptor = ((FileOutputStream) responseOut).getFD();
-			if (fileDescriptor != null) {
-				fileDescriptor.sync();
-			}
 		}
 		responseOut.close();
 		responseOut = null;
@@ -421,6 +416,7 @@ public class TiHTTPClient
 			httpClientThreadCounter = new AtomicInteger();
 		}
 		readyState = 0;
+		responseText = "";
 		connected = false;
 		this.nvPairs = new ArrayList<NameValuePair>();
 		this.parts = new HashMap<String, ContentBody>();
@@ -488,18 +484,8 @@ public class TiHTTPClient
 			return null;
 		}
 
-		byte[] byteBuffer = null;
-		if (responseData != null) {
-			byteBuffer = responseData.getBytes();
-		} else if (responseOut instanceof ByteArrayOutputStream) {
-			byteBuffer = ((ByteArrayOutputStream) responseOut).toByteArray();
-		}
-		if (byteBuffer == null) {
-			return null;
-		}
-
 		CharsetDecoder decoder = charset.newDecoder();
-		ByteBuffer in = ByteBuffer.wrap(byteBuffer);
+		ByteBuffer in = ByteBuffer.wrap(responseData.getBytes());
 
 		try {
 			CharBuffer decodedText = decoder.decode(in);
@@ -538,86 +524,58 @@ public class TiHTTPClient
 			return null;
 		}
 
-		CharSequence responseSequence = null;
-		if (responseData != null) {
-			responseSequence = responseData.toString();
-		} else if (responseOut instanceof ByteArrayOutputStream) {
-			responseSequence = responseOut.toString();
+		CharSequence responseSequence = responseData.toString();
+		Pattern pattern = Pattern.compile(regex);
+		Matcher matcher = pattern.matcher(responseSequence);
+		if (matcher.find()) {
+			return matcher.group(1);
 		}
-		if (responseSequence != null) {
-			Pattern pattern = Pattern.compile(regex);
-			Matcher matcher = pattern.matcher(responseSequence);
-			if (matcher.find()) {
-				return matcher.group(1);
-			}
-		}
+
 		return null;
 	}
 
 	public String getResponseText()
 	{
-		// If we've already transcoded the response text below, then return it now.
-		if (this.responseText != null) {
-			return this.responseText;
+		if (responseText != null || responseData == null) {
+			return responseText;
 		}
 
 		// First try decoding the response data using the charset
 		// specified in the response content-type header.
-		String text = null;
-		if (this.charset != null) {
-			text = decodeResponseData(this.charset);
+		if (charset != null) {
+			responseText = decodeResponseData(charset);
+			if (responseText != null) {
+				return responseText;
+			}
 		}
 
 		// If the first attempt to decode fails try detecting the correct
 		// charset by scanning the response data.
-		if (text == null) {
-			String detectedCharset = detectResponseDataEncoding();
-			if (detectedCharset != null) {
-				Log.d(TAG, "detected charset: " + detectedCharset, Log.DEBUG_MODE);
-				text = decodeResponseData(detectedCharset);
-				if (text != null) {
-					this.charset = detectedCharset;
-				}
+		String detectedCharset = detectResponseDataEncoding();
+		if (detectedCharset != null) {
+			Log.d(TAG, "detected charset: " + detectedCharset, Log.DEBUG_MODE);
+			responseText = decodeResponseData(detectedCharset);
+			if (responseText != null) {
+				charset = detectedCharset;
+				return responseText;
 			}
 		}
 
 		// As a last resort try our fallback charsets to decode the data.
-		if (text == null) {
-			for (String charset : FALLBACK_CHARSETS) {
-				text = decodeResponseData(charset);
-				if (text != null) {
-					this.charset = charset;
-					break;
-				}
+		for (String charset : FALLBACK_CHARSETS) {
+			responseText = decodeResponseData(charset);
+			if (responseText != null) {
+				return responseText;
 			}
 		}
 
-		// Log an error if we've failed to transcode the response above.
-		if (text == null) {
-			Log.e(TAG, "Could not decode response text.");
-			text = "";
-		}
-
-		// Store the response text for quick access later, but only if we've finished receiving the response.
-		if (this.responseOut == null) {
-			this.responseText = text;
-		}
-
-		// Return the transcoded response text.
-		return text;
+		Log.e(TAG, "Could not decode response text.");
+		return responseText;
 	}
 
 	public TiBlob getResponseData()
 	{
-		TiBlob blob = this.responseData;
-		if (blob == null) {
-			if (this.responseOut instanceof ByteArrayOutputStream) {
-				blob = TiBlob.blobFromData(((ByteArrayOutputStream) this.responseOut).toByteArray());
-			} else if (this.responseText != null) {
-				blob = TiBlob.blobFromString(this.responseText);
-			}
-		}
-		return blob;
+		return responseData;
 	}
 
 	public DocumentProxy getResponseXML()

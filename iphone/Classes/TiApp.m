@@ -424,70 +424,42 @@ TI_INLINE void waitForMemoryPanicCleared(); //WARNING: This must never be run on
   [TiLogServer startServer];
 #endif
 
-  // Initialize the root-window
+  // nibless window
   window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
 
-  // Initialize the launch options to be used by the client
-  launchOptions = [[NSMutableDictionary alloc] initWithDictionary:launchOptions_];
-
-  // Initialize the root-controller
   [self initController];
 
-  // If we have a APNS-UUID, assign it
-  NSString *apnsUUID = [[NSUserDefaults standardUserDefaults] stringForKey:@"APNSRemoteDeviceUUID"];
-  if (apnsUUID != nil) {
-    remoteDeviceUUID = [apnsUUID copy];
+  // get the current remote device UUID if we have one
+  NSString *curKey = [[NSUserDefaults standardUserDefaults] stringForKey:@"APNSRemoteDeviceUUID"];
+  if (curKey != nil) {
+    remoteDeviceUUID = [curKey copy];
   }
 
-  // iOS 10+: Register our notification delegate
-  if ([TiUtils isIOS10OrGreater]) {
-    [[UNUserNotificationCenter currentNotificationCenter] setDelegate:self];
-  }
+  launchOptions = [[NSMutableDictionary alloc] initWithDictionary:launchOptions_];
 
-  // Get some launch options to validate before finish launching. Some of them
-  // need to be mapepd from native to JS-types to be used by the client
   NSURL *urlOptions = [launchOptions objectForKey:UIApplicationLaunchOptionsURLKey];
   NSString *sourceBundleId = [launchOptions objectForKey:UIApplicationLaunchOptionsSourceApplicationKey];
-  NSDictionary *_remoteNotification = [launchOptions objectForKey:UIApplicationLaunchOptionsRemoteNotificationKey];
-  UILocalNotification *_localNotification = [launchOptions objectForKey:UIApplicationLaunchOptionsLocalNotificationKey];
-  NSNumber *launchedLocation = [launchOptions objectForKey:UIApplicationLaunchOptionsLocationKey];
+  NSDictionary *notification = [launchOptions objectForKey:UIApplicationLaunchOptionsRemoteNotificationKey];
 
-  // Map background location key
-  if (launchedLocation != nil) {
-    [launchOptions setObject:launchedLocation forKey:@"launchOptionsLocationKey"];
-    [launchOptions removeObjectForKey:UIApplicationLaunchOptionsLocationKey];
-  }
+  [launchOptions setObject:NUMBOOL([[launchOptions objectForKey:UIApplicationLaunchOptionsLocationKey] boolValue]) forKey:@"launchOptionsLocationKey"];
+  [launchOptions removeObjectForKey:UIApplicationLaunchOptionsLocationKey];
 
-  // Map local notification
-  if (_localNotification != nil) {
-    localNotification = [[[self class] dictionaryWithLocalNotification:_localNotification] retain];
-    [launchOptions removeObjectForKey:UIApplicationLaunchOptionsLocalNotificationKey];
+  localNotification = [[[self class] dictionaryWithLocalNotification:[launchOptions objectForKey:UIApplicationLaunchOptionsLocalNotificationKey]] retain];
+  [launchOptions removeObjectForKey:UIApplicationLaunchOptionsLocalNotificationKey];
 
-    // Queue the "localnotificationaction" event for iOS 9 and lower.
-    // For iOS 10+, the "userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler" delegate handles it
-    if ([TiUtils isIOSVersionLower:@"9.0"]) {
-      [self tryToPostNotification:localNotification withNotificationName:kTiLocalNotificationAction completionHandler:nil];
-    }
-  }
-
-  // Map launched URL
+  // reset these to be a little more common if we have them
   if (urlOptions != nil) {
     [launchOptions setObject:[urlOptions absoluteString] forKey:@"url"];
     [launchOptions removeObjectForKey:UIApplicationLaunchOptionsURLKey];
   }
-
-  // Map launched App-ID
   if (sourceBundleId != nil) {
     [launchOptions setObject:sourceBundleId forKey:@"source"];
     [launchOptions removeObjectForKey:UIApplicationLaunchOptionsSourceApplicationKey];
   }
-
-  // Generate remote notification of available
-  if (_remoteNotification != nil) {
-    [self generateNotification:_remoteNotification];
+  if (notification != nil) {
+    [self generateNotification:notification];
   }
 
-  // iOS 9+: Map application shortcuts
   if ([TiUtils isIOS9OrGreater] == YES) {
     UIApplicationShortcutItem *shortcut = [launchOptions objectForKey:UIApplicationLaunchOptionsShortcutItemKey];
 
@@ -496,19 +468,12 @@ TI_INLINE void waitForMemoryPanicCleared(); //WARNING: This must never be run on
     }
   }
 
-  // Queue selector for usage in modules / Hyperloop
   [self tryToInvokeSelector:@selector(application:didFinishLaunchingWithOptions:)
               withArguments:[NSOrderedSet orderedSetWithObjects:application, launchOptions_, nil]];
 
-  // If a "application-launch-url" is set, launch it directly
   [self launchToUrl];
-
-  // Boot our kroll-core
   [self boot];
-
-  // Create application support directory if not exists
   [self createDefaultDirectories];
-
   return YES;
 }
 

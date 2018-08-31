@@ -199,11 +199,6 @@ static NSString *kAppUUIDString = @"com.appcelerator.uuid"; // don't obfuscate
   return [[[UIDevice currentDevice] systemVersion] compare:version options:NSNumericSearch] != NSOrderedAscending;
 }
 
-+ (BOOL)isIOSVersionLower:(NSString *)version
-{
-  return [[[UIDevice currentDevice] systemVersion] compare:version options:NSNumericSearch] == NSOrderedAscending;
-}
-
 + (BOOL)isIPad
 {
   return [[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad;

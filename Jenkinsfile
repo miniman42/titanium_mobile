@@ -75,7 +75,9 @@ def unitTests(os, nodeVersion, npmVersion, testSuiteBranch) {
 								if ('android'.equals(os)) {
 									sh 'adb shell am force-stop com.appcelerator.testApp.testing'
 									sh 'adb uninstall com.appcelerator.testApp.testing'
-									killAndroidEmulators()
+									sh 'killall -9 emulator || echo ""'
+									sh 'killall -9 emulator64-arm || echo ""'
+									sh 'killall -9 emulator64-x86 || echo ""'
 								} // if
 							} // finally
 							// save the junit reports as artifacts explicitly so danger.js can use them later
