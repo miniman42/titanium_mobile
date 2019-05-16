@@ -256,7 +256,7 @@ FILENOOP(setHidden
       }
     }
     NSError *error = nil;
-    result = [[NSData data] writeToFile:path options:NSDataWritingFileProtectionComplete | NSDataWritingAtomic error:&error];
+    result = [[NSData data] writeToFile:path options:NSDataWritingFileProtectionNone | NSDataWritingAtomic error:&error];
     if (error != nil) {
       NSLog(@"[ERROR] Could not write file: %@", error.localizedDescription);
       return NUMBOOL(NO);
@@ -402,7 +402,7 @@ FILENOOP(setHidden
     if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
       //create the file if it doesn't exist already
       NSError *writeError = nil;
-      [data writeToFile:path options:NSDataWritingFileProtectionComplete | NSDataWritingAtomic error:&writeError];
+      [data writeToFile:path options:NSDataWritingFileProtectionNone | NSDataWritingAtomic error:&writeError];
       if (writeError != nil) {
         NSLog(@"[ERROR] Could not write data to file at path \"%@\"", path);
       }
@@ -522,7 +522,7 @@ FILENOOP(setHidden
   if (isDirectory) {
     [[NSFileManager defaultManager] createDirectoryAtPath:resultPath withIntermediateDirectories:NO attributes:nil error:&error];
   } else {
-    [[NSData data] writeToFile:resultPath options:NSDataWritingFileProtectionComplete | NSDataWritingAtomic error:&error];
+    [[NSData data] writeToFile:resultPath options:NSDataWritingFileProtectionNone | NSDataWritingAtomic error:&error];
   }
 
   if (error != nil) {
