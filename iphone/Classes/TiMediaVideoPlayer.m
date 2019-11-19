@@ -32,8 +32,16 @@
     loaded = loaded_;
     [self setProxy:proxy_];
     [self setMovie:controller_];
+    controller_.delegate = self;
   }
   return self;
+}
+
+- (void)playerViewController:(AVPlayerViewController *)playerViewController
+willEndFullScreenPresentationWithAnimationCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator
+{
+    [self.proxy fireEvent:@"complete" withObject:nil errorCode:0 message:nil];
+    [playerViewController dismissViewControllerAnimated:NO completion:nil];
 }
 
 - (void)animationCompleted:(id)note
