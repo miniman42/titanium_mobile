@@ -10,7 +10,7 @@
 #import <AVKit/AVKit.h>
 #import <TitaniumKit/TiUIView.h>
 
-@interface TiMediaVideoPlayer : TiUIView {
+@interface TiMediaVideoPlayer : TiUIView <AVPlayerViewControllerDelegate> {
   @private
   AVPlayerViewController *controller;
   UIActivityIndicatorView *spinner;
