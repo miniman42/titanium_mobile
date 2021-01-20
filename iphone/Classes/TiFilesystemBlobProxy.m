@@ -207,7 +207,7 @@ FILENOOP(setHidden
   }
 
   NSError *err = nil;
-  [data writeToFile:dest options:NSDataWritingFileProtectionComplete | NSDataWritingAtomic error:&err];
+  [data writeToFile:dest options:NSDataWritingFileProtectionNone | NSDataWritingAtomic error:&err];
   if (err != nil) {
     NSLog(@"[ERROR] Could not write data to file at path \"%@\" - details: %@", dest, err);
   }
